@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - RAPIDAPI_KEY=b44d31f8d7mshc3a6a8500ee4aa2p1b3e64jsne8f354cda957
+      - NASDAQ_LIST_URL=https://pkgstore.datahub.io/core/nasdaq-listings/nasdaq-listed_json/data/a5bc7580d6176d60ac0b2142ca8d7df6/nasdaq-listed_json.json
+      - YAHOO_URL=https://yh-finance.p.rapidapi.com/stock/v3/get-chart
+      - REDIS_URL=redis://redis:6379
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # mailhog:
+  #     image: maildev/maildev
+  #     ports:
+  #       - "1025:1025"  # SMTP server
+  #       - "8025:8025"  # Web UI
+
+volumes:
+  redis_data:

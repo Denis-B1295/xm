@@ -11,6 +11,14 @@ I was short on time, had a chance to work Friday evening only, sorry I haven't a
 npm run test
 ```
 
-The codebase has a modular structure. For simplicity I do not send an email, but it is doable with properly comfigured SMTP and uncommented await sendEmail()
+The codebase has a modular structure. For simplicity I do not send an email, but it is doable with properly comfigured SMTP and uncommented await sendEmail().
 
 Apart from that the solution works as expected, based on my understanding.
+
+
+Alternatively you can run it from local instead of Docker, please make sure to have at least node 18, and copy env vars from docker-compose:
+```
+npm i
+npm run web
+```
+P.S.: All env vars must be securely passed to a container and not shared in a public repo, this is just an example repo.
