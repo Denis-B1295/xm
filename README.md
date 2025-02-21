@@ -89,6 +89,7 @@ src/
 ### Technical Debt
 1. Configuration Management
     - Implement config validation
+    - Implement linting, formatting
     - Add environment-specific configs
 2. Observability
     - Add request logging
