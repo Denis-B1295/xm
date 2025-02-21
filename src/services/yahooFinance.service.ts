@@ -3,15 +3,25 @@ import dayjs from 'dayjs';
 import { HistoricalData } from '../types/yahoo.js';
 import { validateYahooResponseStructure } from '../utils/yahoo.js';
 import { DataValidationError, YahooApiError } from '../types/error.js';
+import { isValidSymbol } from '../utils/company.js';
+import { CompanySymbol } from '../types/nasdaq.js';
 
-export const getHistoricalData = async (symbol: string, startDate: string, endDate: string): Promise<HistoricalData[] | undefined> => {
+export const getHistoricalData = async (symbol: string, nasdacData: CompanySymbol[], startDate: string, endDate: string): Promise<HistoricalData[] | undefined> => {
     try{
         if(!process.env.YAHOO_URL || !process.env.RAPIDAPI_KEY){
             throw `Env var YAHOO_URL or RAPIDAPI_KEY are not set`;
         }
-        const startPeriod = dayjs(startDate).startOf('day').valueOf() / 1000;
-        const endPeriod = dayjs(endDate).startOf('day').valueOf() / 1000;
+        if(!isValidSymbol(symbol, nasdacData)){
+            throw new DataValidationError('Invalid company symbol');
+        }
+        const startDayJS = dayjs(startDate);
+        const endDayJS = dayjs(endDate);
+        const startPeriod = startDayJS.isValid() ? startDayJS.startOf('day').valueOf() / 1000 : undefined;
+        const endPeriod = endDayJS.isValid()  ? endDayJS.startOf('day').valueOf() / 1000 : undefined;
     
+        if(!startPeriod || !endPeriod){
+            throw new DataValidationError('Please check startDate and endPeriod');
+        }
         const { data } = await axios.get(process.env.YAHOO_URL, {
             params: {
                 interval: '1d',

@@ -9,12 +9,13 @@ export const handleHistoricalQuotes = async (req: Request, res: Response) => {
   const { symbol, startDate, endDate, email } = req.body;
 
   try {
-    const data = await getHistoricalData(symbol, startDate, endDate);
+    const nasdacData = await getNasdacData();
+
+    const data = await getHistoricalData(symbol, nasdacData, startDate, endDate);
     if(!data){
       throw ("No historical data was returned from Yahoo, please contact administrators...")
     }
-    const nasdaqData = await getNasdacData();
-    const companyName = getCompanyName(symbol, nasdaqData) || 'Unknown Company';
+    const companyName = getCompanyName(symbol, nasdacData) || 'Unknown Company';
 
     const csv = generateCSV(data);
 

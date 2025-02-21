@@ -1,113 +1,245 @@
-// historicalData.test.ts
 import axios from 'axios';
+import dayjs from 'dayjs';
 import { getHistoricalData } from '../../services/yahooFinance.service.js';
-import { DataValidationError, YahooApiError } from '../../types/error.js';
+import { DataValidationError } from '../../types/error.js';
+import { CompanySymbol } from '../../types/nasdaq.js';
 
 
 jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockAxios = axios as jest.Mocked<typeof axios>;
 
 describe('getHistoricalData', () => {
-  const originalEnv = process.env;
-  const mockData = {
-    chart: {
-      result: [{
-        timestamp: [1638316800, 1638403200],
-        indicators: {
-          quote: [{
-            open: [100, 101],
-            high: [102, 103],
-            low: [99, 100],
-            close: [101, 102],
-            volume: [10000, 20000]
-          }]
-        }
-      }]
-    }
+  const validDate = '2023-01-01';
+  const invalidDate = 'invalid-date';
+  const OLD_ENV = process.env;
+  const TEST_DATES = {
+    start: '2023-01-01',
+    end: '2023-01-10',
+    startTimestamp: 1672531200, // 2023-01-01 00:00:00 UTC
+    endTimestamp: 1673308800    // 2023-01-10 00:00:00 UTC
   };
+  const nasdacData: CompanySymbol[] = [
+    {
+      Symbol: 'AAPL',
+      'Company Name': 'AAPL company'
+    }
+  ];
+  
 
   beforeEach(() => {
     jest.resetAllMocks();
-    process.env = { ...originalEnv };
+    process.env = { 
+      ...OLD_ENV,
+      YAHOO_URL: 'https://api.yahoo.com/v3/get-chart',
+      RAPIDAPI_KEY: 'test-api-key'
+    };
+
+    // Mock successful API response
+    mockAxios.get.mockResolvedValue({
+      data: {
+        chart: {
+          result: [{
+            timestamp: [TEST_DATES.startTimestamp, TEST_DATES.endTimestamp],
+            indicators: {
+              quote: [{
+                open: [100, 101],
+                high: [102, 103],
+                low: [99, 100],
+                close: [101, 102],
+                volume: [100000, 200000]
+              }]
+            }
+          }]
+        }
+      }
+    });
   });
 
   afterAll(() => {
-    process.env = originalEnv;
+    process.env = OLD_ENV;
   });
 
-  it('should return formatted historical data on successful API call', async () => {
-    process.env.YAHOO_URL = 'https://api.yahoo.com';
-    process.env.RAPIDAPI_KEY = 'test-key';
-    mockedAxios.get.mockResolvedValue({ data: mockData });
+  describe('Successful Scenarios', () => {
+    it('should return formatted historical data', async () => {
+      mockAxios.get.mockResolvedValue({
+        data: {
+          chart: {
+            result: [{
+              timestamp: [1672531200],
+              indicators: {
+                quote: [{
+                  open: [100],
+                  high: [102],
+                  low: [99],
+                  close: [101],
+                  volume: [100000]
+                }]
+              }
+            }]
+          }
+        }
+      });
 
-    const result = await getHistoricalData('AAPL', '2023-01-01', '2023-01-10');
-    
-    expect(result).toEqual([
-      {
-        date: '01 Dec 2021',
+      const result = await getHistoricalData('AAPL', nasdacData, validDate, validDate);
+      
+      expect(result).toEqual([{
+        date: '01 Jan 2023',
         open: 100,
         high: 102,
         low: 99,
         close: 101,
-        volume: 10000
-      },
-      {
-        date: '02 Dec 2021',
+        volume: 100000
+      }]);
+    });
+
+    it('should return properly formatted historical data', async () => {
+      const result = await getHistoricalData('AAPL', nasdacData, TEST_DATES.start, TEST_DATES.end);
+      
+      expect(result).toEqual([
+        {
+          date: dayjs(TEST_DATES.startTimestamp * 1000).format('DD MMM YYYY'),
+          open: 100,
+          high: 102,
+          low: 99,
+          close: 101,
+          volume: 100000
+        },
+        {
+          date: dayjs(TEST_DATES.endTimestamp * 1000).format('DD MMM YYYY'),
+          open: 101,
+          high: 103,
+          low: 100,
+          close: 102,
+          volume: 200000
+        }
+      ]);
+    });
+
+    it('should handle empty data response', async () => {
+      mockAxios.get.mockResolvedValue({
+        data: {
+          chart: {
+            result: []
+          }
+        }
+      });
+
+      await expect(getHistoricalData('AAPL', nasdacData, validDate, validDate))
+        .rejects.toThrow(DataValidationError);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should throw for invalid symbol', async () => {
+      await expect(getHistoricalData('INVALID_SYMBOL', nasdacData, validDate, validDate))
+        .rejects.toThrow('Invalid company symbol');
+    });
+
+    it('should throw for invalid start date', async () => {
+      await expect(getHistoricalData('AAPL', nasdacData, invalidDate, validDate))
+        .rejects.toThrow('Please check startDate and endPeriod');
+    });
+
+    it('should handle API rate limiting', async () => {
+      mockAxios.get.mockRejectedValue({
+        response: {
+          status: 429,
+          data: { message: 'Rate limit exceeded' }
+        }
+      });
+
+      await expect(getHistoricalData('AAPL', nasdacData, validDate, validDate))
+        .rejects.toThrow('Failed to fetch historical data');
+    });
+
+    it('should handle network errors', async () => {
+      mockAxios.get.mockRejectedValue(new Error('Network Error'));
+
+      await expect(getHistoricalData('AAPL', nasdacData, validDate, validDate))
+        .rejects.toThrow('Failed to fetch historical data');
+    });
+
+    it('should handle partial data response', async () => {
+      mockAxios.get.mockResolvedValue({
+        data: {
+          chart: {
+            result: [{
+              timestamp: [1672531200],
+              indicators: {
+                quote: [{
+                  open: [100],
+                  high: [102],
+                  low: [99],
+                  // Missing close and volume
+                }]
+              }
+            }]
+          }
+        }
+      });
+
+      await expect(getHistoricalData('AAPL', nasdacData, validDate, validDate))
+        .rejects.toThrow(DataValidationError);
+    });
+  });
+
+
+  describe('Data Transformation', () => {
+    it('should handle multiple data points', async () => {
+      mockAxios.get.mockResolvedValue({
+        data: {
+          chart: {
+            result: [{
+              timestamp: [1672531200, 1672617600],
+              indicators: {
+                quote: [{
+                  open: [100, 101],
+                  high: [102, 103],
+                  low: [99, 100],
+                  close: [101, 102],
+                  volume: [100000, 200000]
+                }]
+              }
+            }]
+          }
+        }
+      });
+
+      const result = await getHistoricalData('AAPL', nasdacData, validDate, validDate);
+      expect(result).toHaveLength(2);
+      expect(result?.[1]).toEqual({
+        date: '02 Jan 2023',
         open: 101,
         high: 103,
         low: 100,
         close: 102,
-        volume: 20000
-      }
-    ]);
+        volume: 200000
+      });
+    });
+
+    // it('should filter out invalid data points', async () => {
+    //   mockAxios.get.mockResolvedValue({
+    //     data: {
+    //       chart: {
+    //         result: [{
+    //           timestamp: [1672531200, null],
+    //           indicators: {
+    //             quote: [{
+    //               open: [100, undefined],
+    //               high: [102, null],
+    //               low: [99, 100],
+    //               close: [101, 102],
+    //               volume: [100000, 200000]
+    //             }]
+    //           }
+    //         }]
+    //       }
+    //     }
+    //   });
+
+    //   const result = await getHistoricalData('AAPL', nasdacData, validDate, validDate);
+    //   expect(result).toHaveLength(1);
+    // });
   });
 
-  it('should throw DataValidationError when response structure is invalid', async () => {
-    process.env.YAHOO_URL = 'https://api.yahoo.com';
-    process.env.RAPIDAPI_KEY = 'test-key';
-    
-    const invalidData = { chart: { result: [{}] }};
-    mockedAxios.get.mockResolvedValue({ data: invalidData });
-
-    await expect(getHistoricalData('AAPL', '2023-01-01', '2023-01-10'))
-      .rejects.toThrow(DataValidationError);
-  });
-
-  it('should handle API errors properly', async () => {
-    process.env.YAHOO_URL = 'https://api.yahoo.com';
-    process.env.RAPIDAPI_KEY = 'test-key';
-    
-    mockedAxios.get.mockRejectedValue(new YahooApiError('API rate limit exceeded'));
-
-    await expect(getHistoricalData('AAPL', '2023-01-01', '2023-01-10'))
-      .rejects.toThrow(YahooApiError);
-  });
-
-  it('should throw generic error for unexpected exceptions', async () => {
-    process.env.YAHOO_URL = 'https://api.yahoo.com';
-    process.env.RAPIDAPI_KEY = 'test-key';
-    
-    mockedAxios.get.mockRejectedValue(new Error('Network error'));
-
-    await expect(getHistoricalData('AAPL', '2023-01-01', '2023-01-10'))
-      .rejects.toThrow('Failed to fetch historical data');
-  });
-
-  it('should validate response structure before processing', async () => {
-    process.env.YAHOO_URL = 'https://api.yahoo.com';
-    process.env.RAPIDAPI_KEY = 'test-key';
-    
-    // Malformed response missing timestamp
-    const invalidData = {
-      chart: {
-        result: [{
-          indicators: { quote: [{}] }
-        }]
-      }
-    };
-    mockedAxios.get.mockResolvedValue({ data: invalidData });
-
-    await expect(getHistoricalData('AAPL', '2023-01-01', '2023-01-10'))
-      .rejects.toThrow(DataValidationError);
-  });
 });

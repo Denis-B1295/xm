@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { handleHistoricalQuotes } from '../controllers/company.controller.js';
-import {validateHistoricalDataInput} from '../services/validations.service.js';
-import { getNasdacData } from '../services/nasdaq.service.js';
+import {validateHistoricalDataRequest} from '../services/validations.service.js';
 
 const COMPANY_ROUTE = 'company';
 
 export const companyRoutes = async (router: Router) => {
-    const symbolData = await getNasdacData();
     /**
    * @swagger
    * /company/historical-data:
@@ -42,5 +40,5 @@ export const companyRoutes = async (router: Router) => {
    *             example:
    *               error: "Failed to process request"
    */
-    return router.post(`/${COMPANY_ROUTE}/historical-data`, validateHistoricalDataInput(symbolData), handleHistoricalQuotes);
+    return router.post(`/${COMPANY_ROUTE}/historical-data`, validateHistoricalDataRequest, handleHistoricalQuotes);
 }
