@@ -8,6 +8,6 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "types": ["node", "jest"]               /* Skip type checking all .d.ts files. */
+    "types": ["node", "jest"]
   }
 }
